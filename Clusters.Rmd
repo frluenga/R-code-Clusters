@@ -1,0 +1,129 @@
+---
+title: "Clusters Analysis"
+author: "Luengas R. Fabian"
+date: "25/02/2021"
+output: pdf_document
+---
+\section{Cluster: Clasificación de países según puntaje de felicidad}
+Para la aplicación del método de K-means de Clusterización, se utilizó el dataset con el cual se generó el informe sobre el estado de la felicidad de los países en el mundo, este se encuentra publicado en el repositorio de kaggle en el link: https://www.kaggle.com/unsdsn/world-happiness. Éste clasifica a 155 países según sus niveles de felicidad, los datos fueron obtenidos de la Encuesta Mundial de Gallup en diferentes años (2015, 2016, 2017, 2018 y 2019). Para efectos de este trabajo se agrupó cada país con la media de sus resultados en todos los periodos evaluados.
+```{r, echo=FALSE, message=FALSE,results='hide',warning=FALSE}
+library(factoextra)
+library(cluster)
+library(FactoMineR)
+library(dendextend)
+library(corrplot)
+library(NbClust)
+library(fpc)
+library(igraph)
+library(clValid)
+library(pvclust)
+library(clustertend)
+library(dplyr)
+library(knitr)
+```
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r,echo=FALSE}
+df <- read.csv("Data1.csv")
+df = df[-1,]
+```
+
+```{r,echo=FALSE}
+df$Score = as.numeric(df$Score)
+df$GDP.per.capita = as.numeric(df$GDP.per.capita)
+df$Social.support = as.numeric(df$Social.support)
+df$Healthy.life.expectancy = as.numeric(df$Healthy.life.expectancy)
+df$Freedom.to.make.choices = as.numeric(df$Freedom.to.make.choices)
+df$Generosity = as.numeric(df$Generosity)
+df$Perceptions.corruption = as.numeric(df$Perceptions.corruption)
+```
+
+```{r,echo=FALSE}
+m <- as.matrix(df[,-1])
+row.names(m) <- df[,1]
+o <- scale(df[,-1])
+```
+\subsection{1. Distancias entre observaciones}
+El algoritmo de agrupamiento o clusterización usado, K-means nos indica la distancia que se presenta entre cada una de las observaciones con el fin de determinar similitudes entre los resultados de ciertos tipos de regiones, estas distancias se miden bajo el método euclidiano obteniendo así una aproximación directa entre puntos.
+
+```{r,echo=FALSE}
+dist.eucl <- dist(m, method = "euclidean")
+table <- kable(round(as.matrix(dist.eucl)[1:10, 1:10], 1))
+table
+```
+Se desarrolla una breve exploración de una muestra de 10 observaciones con el fin de identificar el distanciamiento o proximidad entre ellas, es relevante indicar que el proceso de clusterización depende de la distribución de las observaciones entre ellas, por tanto, más adelante en este estudio se determinará la viabilidad de plantear clusters para este conjunto de datos. 
+
+A simple vista, tenemos observaciones que presentan distancias relativamente próximas entre ellas mientras que en contraste a otras observaciones se aleja, no es suficiente esta exploración para determinar la viabilidad o cantidad de clusters que se puedan encontrar.
+
+```{r,echo=FALSE}
+fviz_nbclust(m, kmeans, method = "wss")+
+geom_vline(xintercept = 3, linetype = 2)
+```
+
+En la gráfica anterior se observa que los dos primeros clusters absorben la mayor cantidad de varianza, sin embargo el cluster 3, se incluye ya que es aquí donde se puede observar una curvatura donde los siguientes clusters ya no representan valores significativos para el análisis. 
+
+\subsection{2. K-means: Clusters}
+Una vez el algoritmo se ejecuta, podemos obtener la clasificación de nuestros datos en 3 distintos clusters, cada cluster representa un grupo con características semejantes, a continuación se desarrolla un breve análisis. 
+```{r, echo=FALSE}
+km.res <- kmeans(m, 3,nstart = 20)
+```
+
+```{r, message=FALSE,warning=FALSE,results='hide',echo=FALSE}
+aggregate(df, by=list(cluster=km.res$cluster), mean)
+dd <- cbind(df, cluster = km.res$cluster)
+```
+Inicialmente se compara los clusters con la calificación obtenida por los países, en la cual podemos concluir que el cluster número 1 son aquellos países que sacaron una calificación media concentrada entre 5.3 y 5.9 aproximadamente, para el cluster número 2 se encuentran los países con las calificaciones más bajas encontradas en el estudio concentradas entre 3.9 y 4.5 y para el cluster número 3 se encuentran los países con calificaciones más altas concentradas  entre 6.5 y 7.2.
+```{r,echo=FALSE,warning=FALSE,fig.width=5,fig.height=3.5}
+ggplot(dd,aes(x=as.factor(cluster),y=Score,fill=cluster))+
+    geom_boxplot(alpha=0.6)+
+    labs(x="Cluster", y="Score / Happiness",
+        title="Clasificación de los Clusters Según Puntaje")+
+        theme(legend.position= "none")
+```
+\subsection{2.1 K-means: Visualización Clusters}
+En una vista más general podemos encontrar que la visualización de los 3 clusters nos permite ver tenuemente la tendencia explicada en las calificaciones ó puntaje de felicidad en cada cluster, esto nos indica que la clusterización de esta base de datos posiblemente no sea la más adecuada
+```{r,message=FALSE,warning=FALSE,echo=FALSE,fig.width=5.5,fig.height=4}
+fviz_cluster(km.res, data = m,
+  palette = c("#2E9FDF", "#FC4E07", "#E7B800", "#FC4E07"),
+  ellipse.type = "norm", # Concentration ellipse
+  star.plot = TRUE, # Add segments from centroids to items
+  repel = TRUE, # Avoid label overplotting (slow)
+  ggtheme = theme_minimal())
+```
+\subsection{2.2 K-means: Re-agrupamiento a 2 Clusters}
+```{r, echo=FALSE}
+km.res.1 <- kmeans(m, 2,nstart = 20)
+```
+
+```{r, message=FALSE,warning=FALSE,results='hide',echo=FALSE}
+aggregate(df, by=list(cluster=km.res.1$cluster), mean)
+dd.1 <- cbind(df, cluster = km.res.1$cluster)
+```
+La distribución para dos clusters que representan la calificación de felicidad obtenida en cada uno de los países es clara, existe un cluster 1 que representa a los países punta en calificaciones concentradas entre 5.3 y 6.6 y para el cluster 2 se encuentran a los países con calificaciones concentradas entre 4 y 5.1
+
+```{r,echo=FALSE,warning=FALSE,fig.width=5,fig.height=3.5}
+ggplot(dd.1,aes(x=as.factor(cluster),y=Score,fill=cluster))+
+    geom_boxplot(alpha=0.6)+
+    labs(x="Cluster", y="Score / Happiness",
+        title="Clasificación de los Clusters Según Puntaje")+
+        theme(legend.position= "none")
+```
+La visualización de ambos clusters permite apreciar la diferencia o distribución entre estos dos clusters, siendo el cluster uno quien presenta una agrupación más cercana a su centroide.
+
+```{r,message=FALSE,warning=FALSE,echo=FALSE,fig.width=5.5,fig.height=4}
+fviz_cluster(km.res.1, data = m,
+  palette = c("#2E9FDF", "#FC4E07", "#E7B800", "#FC4E07"),
+  ellipse.type = "norm", # Concentration ellipse
+  star.plot = TRUE, # Add segments from centroids to items
+  repel = TRUE, # Avoid label overplotting (slow)
+  ggtheme = theme_minimal())
+```
+
+\subsection{3. Conclusiones}
+    1. La eliminación de un tercer cluster optimiza el análisis y lo aleja de caer en la trampa de encontrar grupos en los datos donde no se presentan, esta información nos permite agrupar entonces, solo los países con puntajes altos en felicidad y puntajes bajos.
+    2. El análisis cluster brinda una visión del conjunto de datos que a simple vista no es clara, por tanto, encontrar países de determinada región en un cluster nos da paso a una interpretación o análisis más profundo de su psicología o comportamiento social. 
+
+
